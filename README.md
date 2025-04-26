@@ -41,12 +41,12 @@ total 12
 
 ## 📂 Project Structure
 
-tossh/
-├── main.c
-├── alias.h
-├── alias.c
-├── terminal.h
-├── terminal.c
+tossh/  
+├── main.c  
+├── alias.h  
+├── alias.c  
+├── terminal.h  
+├── terminal.c  
 ├── Makefile
 
 ## 📜 License
