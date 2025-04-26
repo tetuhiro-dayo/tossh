@@ -1,0 +1,17 @@
+{
+    "files.associations": {
+        "*.ejs": "html",
+        "*.html": "html",
+        "*.css": "css",
+        "*.js": "javascript",
+        "*.ts": "typescript",
+        "*.py": "python",
+        ".php": "php",
+        "*.tsx": "typescriptreact",
+        "*.jsx": "javascriptreact",
+        "signal_handler.h": "c",
+        "stdio.h": "c",
+        "stdlib.h": "c",
+        "string.h": "c"
+    }
+}

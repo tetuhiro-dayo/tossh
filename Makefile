@@ -1,19 +1,21 @@
 CC = gcc
-CFLAGS = -Wall
-TARGET = tossh
-OBJS = main.o alias.o terminal.o
+CFLAGS = -Wall -g
 
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
+# ソースファイル一覧
+SRCS = main.c executor.c background.c signal_handler.c alias.c terminal.c
 
-main.o: main.c alias.h terminal.h
-	$(CC) $(CFLAGS) -c main.c
+# オブジェクトファイル一覧
+OBJS = $(SRCS:.c=.o)
 
-alias.o: alias.c alias.h
-	$(CC) $(CFLAGS) -c alias.c
+# ターゲット
+tossh: $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $(OBJS)
 
-terminal.o: terminal.c terminal.h
-	$(CC) $(CFLAGS) -c terminal.c
+# 共通コンパイルルール
+%.o: %.c
+	$(CC) $(CFLAGS) -c $<
 
+# クリーン
+.PHONY: clean
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -f *.o tossh

@@ -1,198 +1,166 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <time.h>
-#include "alias.h"
-#include "terminal.h"
+#include <signal.h>
+#include <dirent.h>
+#include <termios.h>
+
+#include "executor.h"
+#include "background.h"
+#include "signal_handler.h"
 
 #define MAX_CMD_LENGTH 1024
-#define MAX_PATH_LENGTH 1024
-#define MAX_ARGS 64
 #define MAX_HISTORY 100
 
-#define COLOR_RESET "\033[0m"
-#define COLOR_CYAN "\033[36m"
-#define COLOR_GREEN "\033[32m"
-#define COLOR_RED "\033[31m"
-
-pid_t bg_pids[MAX_ARGS];
-int bg_count = 0;
 char history[MAX_HISTORY][MAX_CMD_LENGTH];
 int history_count = 0;
+static struct termios orig_termios;
 
-int isCommand(const char *input, const char *command) {
-    return strcmp(input, command) == 0;
+void disableRawMode() {
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
 }
 
-void executeCommandWithMultiplePipes(char *command) {
-    char *cmds[MAX_ARGS];
-    int cmd_count = 0;
-    int background = 0;
+void enableRawMode() {
+    tcgetattr(STDIN_FILENO, &orig_termios);
+    atexit(disableRawMode);
+    struct termios raw = orig_termios;
+    raw.c_lflag &= ~(ICANON | ECHO);
+    raw.c_cc[VMIN] = 1;
+    raw.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
 
-    // バックグラウンド実行チェック
-    char *bg_check = strchr(command, '&');
-    if (bg_check != NULL) {
-        background = 1;
-        *bg_check = '\0';
-    }
-
-    char *token = strtok(command, "|");
-    while (token != NULL && cmd_count < MAX_ARGS - 1) {
-        cmds[cmd_count++] = token;
-        token = strtok(NULL, "|");
-    }
-    cmds[cmd_count] = NULL;
-
-    int pipefd[2 * (cmd_count - 1)];
-    for (int i = 0; i < cmd_count - 1; i++) {
-        if (pipe(pipefd + i*2) < 0) {
-            perror("pipe");
-            exit(EXIT_FAILURE);
+// Simple completion: scan current dir and PATH
+void completion(const char *buf, int len) {
+    int printed = 0;
+    // current directory
+    DIR *cd = opendir(".");
+    if (cd) {
+        struct dirent *ent;
+        while ((ent = readdir(cd))) {
+            if (strncmp(ent->d_name, buf, len) == 0) {
+                printf("%s  ", ent->d_name);
+                printed = 1;
+            }
         }
+        closedir(cd);
     }
-
-    for (int i = 0; i < cmd_count; i++) {
-        pid_t pid = fork();
-        if (pid == 0) {
-            if (i != 0) {
-                dup2(pipefd[(i-1)*2], STDIN_FILENO);
-            }
-            if (i != cmd_count - 1) {
-                dup2(pipefd[i*2 + 1], STDOUT_FILENO);
-            }
-
-            for (int j = 0; j < 2 * (cmd_count - 1); j++) {
-                close(pipefd[j]);
-            }
-
-            char *args[MAX_ARGS];
-            int k = 0;
-            char *arg = strtok(cmds[i], " ");
-            while (arg != NULL && k < MAX_ARGS - 1) {
-                args[k++] = arg;
-                arg = strtok(NULL, " ");
-            }
-            args[k] = NULL;
-
-            if (i == cmd_count - 1) {
-                for (int m = 0; args[m] != NULL; m++) {
-                    if (strcmp(args[m], ">") == 0 || strcmp(args[m], ">>") == 0) {
-                        int append = (strcmp(args[m], ">>") == 0);
-                        char *filename = args[m + 1];
-                        int fd = open(filename, O_WRONLY | O_CREAT | (append ? O_APPEND : O_TRUNC), 0644);
-                        if (fd < 0) {
-                            perror("open");
-                            exit(EXIT_FAILURE);
-                        }
-                        dup2(fd, STDOUT_FILENO);
-                        close(fd);
-                        args[m] = NULL;
-                        break;
-                    }
+    // PATH
+    char *path = getenv("PATH");
+    char *dirs = strdup(path ? path : "");
+    char *dir = strtok(dirs, ":");
+    while (dir) {
+        DIR *d = opendir(dir);
+        if (d) {
+            struct dirent *ent;
+            while ((ent = readdir(d))) {
+                if (strncmp(ent->d_name, buf, len) == 0) {
+                    printf("%s  ", ent->d_name);
+                    printed = 1;
                 }
             }
-
-            execvp(args[0], args);
-            perror("execvp");
-            exit(EXIT_FAILURE);
-        } else if (background) {
-            bg_pids[bg_count++] = pid;
+            closedir(d);
         }
+        dir = strtok(NULL, ":");
     }
-
-    for (int i = 0; i < 2 * (cmd_count - 1); i++) {
-        close(pipefd[i]);
-    }
-
-    if (!background) {
-        for (int i = 0; i < cmd_count; i++) {
-            wait(NULL);
-        }
-    }
+    free(dirs);
+    if (printed) printf("\n");
 }
 
-void waitForBackground() {
-    for (int i = 0; i < bg_count; i++) {
-        waitpid(bg_pids[i], NULL, 0);
-    }
-    bg_count = 0;
-}
-
-// ここから main 関数
 int main() {
-    char command[MAX_CMD_LENGTH];
+    signal(SIGINT, sigint_handler);
+    enableRawMode();
 
     while (1) {
-        printf(COLOR_CYAN "[ tossh ]$ " COLOR_RESET);
-        fflush(stdout);
+        printf("[ tossh ]$ "); fflush(stdout);
+        char buf[MAX_CMD_LENGTH] = {0};
+        int pos = 0;
 
-        if (fgets(command, sizeof(command), stdin) == NULL) {
-            break;
+        // read input
+        while (1) {
+            char c;
+            if (read(STDIN_FILENO, &c, 1) <= 0) continue;
+            if (c == '\n' || c == '\r') {
+                printf("\n");
+                break;
+            } else if (c == 127 || c == 8) {
+                if (pos > 0) {
+                    pos--; buf[pos] = '\0';
+                    printf("\b \b"); fflush(stdout);
+                }
+            } else if (c == '\t') {
+                completion(buf, pos);
+                printf("[ tossh ]$ %s", buf);
+                fflush(stdout);
+            } else {
+                if (pos < MAX_CMD_LENGTH - 1) {
+                    buf[pos++] = c;
+                    buf[pos] = '\0';
+                    printf("%c", c);
+                    fflush(stdout);
+                }
+            }
         }
+        if (pos == 0) continue;
+        strncpy(history[history_count % MAX_HISTORY], buf, MAX_CMD_LENGTH);
+        history_count++;
 
-        command[strcspn(command, "\n")] = 0;
+        // prepare command
+        char command[MAX_CMD_LENGTH];
+        strncpy(command, buf, MAX_CMD_LENGTH);
 
-        if (strlen(command) > 0) {
-            strncpy(history[history_count % MAX_HISTORY], command, MAX_CMD_LENGTH);
-            history_count++;
-        }
-
-        if (isCommand(command, "exit") || isCommand(command, "quit") || isCommand(command, "bye")) {
-            break;
-        }
-
-        if (isCommand(command, "wait")) {
-            waitForBackground();
-            continue;
-        }
-
-        if (isCommand(command, "hello")) {
-            printf("Hello, World!\n");
-            continue;
-        }
-
-        if (isCommand(command, "ver")) {
-            printf("tossh version 1.2.0\n");
-            continue;
-        }
-
-        if (isCommand(command, "joke")) {
-            printf("Why do programmers prefer dark mode? Because light attracts bugs!\n");
-            continue;
-        }
-
-        if (isCommand(command, "about")) {
-            printf("tossh - Terminal Operating System Shell. Created by you!\n");
-            continue;
-        }
-
-        if (isCommand(command, "fortune")) {
-            const char *fortunes[] = {
-                "Great luck: Today is your lucky day!",
-                "Good luck: Something good will happen!",
-                "Small luck: A small blessing awaits.",
-                "Little luck: An okay day.",
-                "Bad luck: Be careful today."
-            };
-            int n = sizeof(fortunes) / sizeof(fortunes[0]);
-            printf("%s\n", fortunes[rand() % n]);
-            continue;
-        }
-
-        if (isCommand(command, "history")) {
-            int start = history_count > MAX_HISTORY ? history_count - MAX_HISTORY : 0;
-            for (int i = start; i < history_count; i++) {
-                printf("%d: %s\n", i + 1, history[i % MAX_HISTORY]);
+        // built-in
+        if (strcmp(command, "exit") == 0 || strcmp(command, "quit") == 0 || strcmp(command, "bye") == 0) break;
+        if (strcmp(command, "wait") == 0) { waitForBackground(); continue; }
+        if (command[0] == '!' && isdigit((unsigned char)command[1])) {
+            int num = atoi(&command[1]);
+            if (num > 0 && num <= history_count) {
+                char *replay = history[(num - 1) % MAX_HISTORY];
+                printf("Replaying: %s\n", replay);
+                exec(replay);
+            } else {
+                printf("No such command in history!\n");
             }
             continue;
         }
-
-        executeCommandWithMultiplePipes(command);
+        if (strncmp(command, "run ", 4) == 0 || strncmp(command, "runscript ", 10) == 0) {
+            char *raw = command + (strncmp(command, "run ", 4) == 0 ? 4 : 10);
+            // trim trailing dots
+            size_t rlen = strlen(raw);
+            while (rlen && raw[rlen - 1] == '.') raw[--rlen] = '\0';
+            char filename[MAX_CMD_LENGTH];
+            char *dot = strrchr(raw, '.');
+            if (!dot || strcmp(dot, ".tossh") != 0)
+                snprintf(filename, sizeof(filename), "%s.tossh", raw);
+            else
+                strncpy(filename, raw, sizeof(filename));
+            FILE *fp = fopen(filename, "r");
+            if (!fp) { perror("fopen"); continue; }
+            char line[MAX_CMD_LENGTH];
+            while (fgets(line, sizeof(line), fp)) {
+                line[strcspn(line, "\n")] = '\0';
+                if (strlen(line)) exec(line);
+            }
+            fclose(fp);
+            continue;
+        }
+        if (strcmp(command, "hello") == 0) { printf("Hello, World!\n"); continue; }
+        if (strcmp(command, "ver") == 0) { printf("tossh version 1.2.0\n"); continue; }
+        if (strcmp(command, "fortune") == 0) {
+            const char *f[] = {"Great luck...","Good luck...","Small luck...","Little luck...","Bad luck..."};
+            printf("%s\n", f[rand() % 5]); continue;
+        }
+        if (strcmp(command, "history") == 0) {
+            int start = history_count > MAX_HISTORY ? history_count - MAX_HISTORY : 0;
+            for (int i = start; i < history_count; i++)
+                printf("%d: %s\n", i + 1, history[i % MAX_HISTORY]);
+            continue;
+        }
+        // external
+        exec(command);
     }
-
+    disableRawMode();
     return 0;
 }
