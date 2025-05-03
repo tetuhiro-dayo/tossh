@@ -5,5 +5,7 @@
 
 void disableCanonicalMode(struct termios *original_termios);
 void restoreCanonicalMode(struct termios *original_termios);
+void enableRawMode();
+void disableRawMode();
 
 #endif

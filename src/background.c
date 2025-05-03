@@ -1,4 +1,5 @@
 #include "background.h"
+#include "const.h"
 #include <stddef.h>
 
 pid_t bg_pids[MAX_ARGS];

@@ -11,16 +11,7 @@
 #include <signal.h>
 #include "alias.h"
 #include "terminal.h"
-
-#define MAX_CMD_LENGTH 1024
-#define MAX_PATH_LENGTH 1024
-#define MAX_ARGS 64
-#define MAX_HISTORY 100
-
-#define COLOR_RESET "\033[0m"
-#define COLOR_CYAN "\033[36m"
-#define COLOR_GREEN "\033[32m"
-#define COLOR_RED "\033[31m"
+#include "const.h"
 
 void exec(char *command) {
     char *cmds[MAX_ARGS];

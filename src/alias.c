@@ -1,4 +1,5 @@
 #include "alias.h"
+#include "const.h"
 
 Alias aliases[MAX_ALIAS];
 int alias_count = 0;

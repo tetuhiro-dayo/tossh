@@ -1,6 +1,7 @@
 #include "signal_handler.h"
 #include <stdio.h>
 #include <unistd.h>
+#include "const.h"
 
 pid_t current_pid = -1;
 
