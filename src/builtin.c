@@ -11,6 +11,7 @@
 bool handle_builtin(char *cmd) {
     // exit 系ビルトイン
     if (strcmp(cmd, "exit") == 0 || strcmp(cmd, "quit") == 0 || strcmp(cmd, "bye") == 0) {
+        printf("Bye.");
         exit(0);
     }
     // history の表示
@@ -33,7 +34,7 @@ bool handle_builtin(char *cmd) {
         const char *replay = get_history(num - 1);
         if (replay) {
             printf("Replaying: %s\n", replay);
-            exec_command((char *)replay);
+            exec((char *)replay);
         } else {
             printf("No such command in history!\n");
         }
@@ -53,7 +54,29 @@ bool handle_builtin(char *cmd) {
         printf("%s\n", f[rand() % 5]);
         return true;
     }
-    // run / runscript ビルトインは executor 側で処理
+    // run / runscript ビルトイン
+    if (strncmp(cmd, "run ", 4) == 0 || strncmp(cmd, "runscript ", 10) == 0) {
+        char *raw = cmd + (strncmp(cmd, "run ", 4) == 0 ? 4 : 10);
+        // トレイリングドットをトリム
+        size_t rlen = strlen(raw);
+        while (rlen > 0 && raw[rlen - 1] == '.') raw[--rlen] = '\0';
+        char filename[MAX_CMD_LENGTH];
+        char *dot = strrchr(raw, '.');
+        if (!dot || strcmp(dot, ".tossh") != 0) {
+            snprintf(filename, sizeof(filename), "%s.tossh", raw);
+        } else {
+            strncpy(filename, raw, sizeof(filename));
+        }
+        FILE *fp = fopen(filename, "r");
+        if (!fp) { perror("fopen"); return true; }
+        char line[MAX_CMD_LENGTH];
+        while (fgets(line, sizeof(line), fp)) {
+            line[strcspn(line, "\n")] = '\0';
+            if (strlen(line)) exec(line);
+        }
+        fclose(fp);
+        return true;
+    }
 
     // ビルトインコマンドに該当しなかった
     return false;

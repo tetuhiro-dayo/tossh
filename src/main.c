@@ -44,7 +44,7 @@ int main() {
         }
 
         // 外部コマンド／バックグラウンド実行
-        exec_command(buf);
+        exec(buf);
     }
 
     // 履歴を書き出し

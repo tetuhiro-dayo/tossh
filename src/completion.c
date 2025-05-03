@@ -2,6 +2,10 @@
 #include "const.h"
 #include <dirent.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <dirent.h>
 
 // Simple completion: scan current dir and PATH
 void completion(const char *buf, int len) {
