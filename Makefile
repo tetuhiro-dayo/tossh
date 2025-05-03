@@ -1,21 +1,53 @@
-CC = gcc
-CFLAGS = -Wall -g
+# ------------------------------------------------
+# Build settings
+# ------------------------------------------------
+CC        := gcc
+CFLAGS    := -Wall -Wextra -g -Iinclude
 
-# ソースファイル一覧
-SRCS = main.c executor.c background.c signal_handler.c alias.c terminal.c
+# ------------------------------------------------
+# Directories
+# ------------------------------------------------
+SRC_DIR   := src
+OBJ_DIR   := build
+INC_DIR   := include
 
-# オブジェクトファイル一覧
-OBJS = $(SRCS:.c=.o)
+# ------------------------------------------------
+# Sources and objects
+# ------------------------------------------------
+SRCS      := $(wildcard $(SRC_DIR)/*.c)
+OBJS      := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS))
 
-# ターゲット
-tossh: $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $(OBJS)
+# ------------------------------------------------
+# Target executable
+# ------------------------------------------------
+TARGET    := tossh
 
-# 共通コンパイルルール
-%.o: %.c
-	$(CC) $(CFLAGS) -c $<
+# ------------------------------------------------
+# Default target
+# ------------------------------------------------
+.PHONY: all
+all: $(TARGET)
 
-# クリーン
+# ------------------------------------------------
+# Link step
+# ------------------------------------------------
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+# ------------------------------------------------
+# Compile step
+# ------------------------------------------------
+# (order-only prerequisite でディレクトリ生成)
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# build ディレクトリがなければ作成
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
+
+# ------------------------------------------------
+# Clean up
+# ------------------------------------------------
 .PHONY: clean
 clean:
-	rm -f *.o tossh
+	rm -rf $(OBJ_DIR) $(TARGET)
