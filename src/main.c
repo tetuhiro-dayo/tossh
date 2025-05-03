@@ -1,3 +1,4 @@
+#include "const.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -9,12 +10,11 @@
 #include "executor.h"
 #include "background.h"
 #include "signal_handler.h"
-#include "const.h"
 
-
-int main() {
+int main(void) {
     // シグナルハンドラ登録
     signal(SIGINT, sigint_handler);
+    signal(SIGCHLD, sigchld_handler);
 
     // 端末を Raw モードに設定
     enableRawMode();
@@ -24,13 +24,13 @@ int main() {
 
     while (1) {
         // プロンプト表示
-        printf(PROMPT);
+        printf(COLOR_CYAN PROMPT COLOR_RESET);
         fflush(stdout);
 
         // 入力行を取得（EOF は負値を返す）
-        char buf[MAX_CMD_LENGTH] = {0};
-        int len = readLine(buf, MAX_CMD_LENGTH);
-        if (len <= 0) {
+        char buf[MAX_CMD_LENGTH];
+        int len = readLine(buf, sizeof(buf));
+        if (len < 0) {
             // Ctrl-D などで終了
             break;
         }
@@ -38,8 +38,12 @@ int main() {
         // 履歴に追加
         add_history(buf);
 
+        // コマンド分解
+       char *argv[MAX_ARGS];
+        int argc = tokenize(buf, argv);
+
         // ビルトインかどうか処理
-        if (handle_builtin(buf)) {
+        if (argc > 0 && handle_builtin(buf,argc, argv)) {
             continue;
         }
 

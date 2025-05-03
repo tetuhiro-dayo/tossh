@@ -8,10 +8,10 @@
 #include "background.h"
 #include "const.h"
 
-bool handle_builtin(char *cmd) {
+bool handle_builtin(char *cmd, int argc, char **argv) {
     // exit 系ビルトイン
     if (strcmp(cmd, "exit") == 0 || strcmp(cmd, "quit") == 0 || strcmp(cmd, "bye") == 0) {
-        printf("Bye.");
+        printf("Bye.\n");
         exit(0);
     }
     // history の表示
@@ -54,6 +54,18 @@ bool handle_builtin(char *cmd) {
         printf("%s\n", f[rand() % 5]);
         return true;
     }
+    if (strcmp(cmd, "cat") == 0) {
+        char *file = argv[1];
+        FILE *fp = fopen(file, "r");
+        if (!fp) { perror("cat"); return true; }
+        char line[1024];
+        while (fgets(line, sizeof(line), fp)) {
+            fputs(line, stdout);
+        }
+        fclose(fp);
+        return true;
+    }
+
     // run / runscript ビルトイン
     if (strncmp(cmd, "run ", 4) == 0 || strncmp(cmd, "runscript ", 10) == 0) {
         char *raw = cmd + (strncmp(cmd, "run ", 4) == 0 ? 4 : 10);

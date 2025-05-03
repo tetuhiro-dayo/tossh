@@ -21,6 +21,6 @@
 #define COLOR_RED "\033[31m"
 
 // プロンプト文字列
-#define PROMPT "\033[36m[ tossh ]\033[32m$ \033[39m"
+#define PROMPT "\n\033[36m[ tossh ]\033[32m$ \033[39m"
 
 #endif // CONST_H
