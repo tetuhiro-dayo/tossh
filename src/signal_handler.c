@@ -6,7 +6,7 @@
 
 pid_t current_pid = -1;
 int bg_count = 0;
-pid_t bg_pids[100];
+pid_t bg_pids[MAX_ARGS];
 
 void sigint_handler(int signo) {
     if (current_pid > 0) {

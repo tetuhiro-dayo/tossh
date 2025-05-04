@@ -17,20 +17,17 @@
  * @param argv: トークンを格納する配列
  * @return トークン数
  */
-static int tokenize(char *s, char **argv) {
+int tokenize(char *s, char **argv) {
     int argc = 0;
     char *p = s;
     while (*p && argc < MAX_ARGS) {
-        // 先頭の空白をスキップ
         while (*p && isspace((unsigned char)*p)) p++;
         if (!*p) break;
         if (*p == '"' || *p == '\'') {
             char quote = *p++;
             argv[argc++] = p;
             while (*p && *p != quote) p++;
-            if (*p == quote) {
-                *p++ = '\0';
-            }
+            if (*p == quote) *p++ = '\0';
         } else {
             argv[argc++] = p;
             while (*p && !isspace((unsigned char)*p)) p++;

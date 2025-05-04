@@ -6,7 +6,6 @@
 
 extern pid_t current_pid;
 extern int bg_count;
-extern pid_t bg_pids[100];  // 適切なサイズを設定
 
 /**
  * SIGINT ハンドラ: フォアグラウンドプロセスに SIGINT を転送
