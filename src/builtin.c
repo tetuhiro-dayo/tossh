@@ -74,10 +74,18 @@ bool handle_builtin(char *cmd, int argc, char **argv) {
         while (rlen > 0 && raw[rlen - 1] == '.') raw[--rlen] = '\0';
         char filename[MAX_CMD_LENGTH];
         char *dot = strrchr(raw, '.');
-        if (!dot || strcmp(dot, ".tossh") != 0) {
+        if (!dot) {
+            // 拡張子なしなら .tossh を付与
             snprintf(filename, sizeof(filename), "%s.tossh", raw);
-        } else {
+        }
+        else if (strcmp(dot, ".tossh") == 0 || strcmp(dot, ".sh") == 0) {
+            // .tossh または .sh ならそのまま
             strncpy(filename, raw, sizeof(filename));
+        }
+        else {
+            // その他の拡張子は未対応
+            fprintf(stderr, "Unsupported script extension: %s\n", dot);
+            return true;
         }
         FILE *fp = fopen(filename, "r");
         if (!fp) { perror("fopen"); return true; }
